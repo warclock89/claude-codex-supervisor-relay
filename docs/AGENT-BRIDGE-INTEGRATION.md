@@ -16,6 +16,7 @@ This guide records the intended integration. It does not claim the software has 
 Agent Bridge remains a separate upstream project. Do not copy its source code into this repository or imply that this repository maintains it.
 
 Upstream references:
+- OpenAI ChatGPT MCP guide (desktop MCP settings and supported transports): https://learn.chatgpt.com/docs/extend/mcp?site_variant=chatgpt
 - https://github.com/jcharveyjr/claude-chatgpt-agent-bridge
 - https://github.com/jcharveyjr/claude-chatgpt-agent-bridge/blob/main/docs/USER_GUIDE.md
 - https://github.com/jcharveyjr/claude-chatgpt-agent-bridge/blob/main/docs/SECURITY.md
