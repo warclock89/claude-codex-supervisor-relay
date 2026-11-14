@@ -36,9 +36,9 @@ ChatGPT desktop MCP client -------- http://127.0.0.1:8787/mcp
                                claude -p    codex exec
 ~~~
 
-Do not start multiple broker instances against the same JSON task store. Keep the server bound to loopback (127.0.0.1). Do not expose the broker to the public internet for this setup.
+Do not start multiple broker instances against the same JSON task store. Keep the server bound to loopback (127.0.0.1). Do not expose the broker to the public internet for this setup. ChatGPT desktop is the sole MCP client; Agent Bridge launches Claude and Codex as worker subprocesses.
 
-The upstream guide documents that ChatGPT desktop, Codex CLI, and the IDE extension share Codex-host MCP configuration. ChatGPT desktop also documents MCP server setup in Settings. Exact client availability and tool exposure must be verified after configuration; a healthy local HTTP endpoint alone does not prove ChatGPT can invoke the tools.
+The upstream guide documents that ChatGPT desktop, Codex CLI, and the IDE extension can share Codex-host MCP configuration. For this governance model, do not register the broker in Claude Code or Codex CLI: their subprocesses are workers, not orchestrators. Configure only ChatGPT desktop as an MCP client. Exact tool exposure must be verified after configuration; a healthy local HTTP endpoint alone does not prove ChatGPT can invoke the tools.
 
 ## 3. Installation sequence
 
@@ -46,10 +46,10 @@ This is the documented upstream setup sequence; it has not been run by this repo
 
 1. Install Node.js 20 or newer. Ensure Git, Claude Code, and Codex CLI are installed and authenticated locally.
 2. Clone Agent Bridge into a dedicated tools directory, not into the ALTA repository.
-3. From the Agent Bridge root, run:
+3. From the Agent Bridge root, run the setup script with CLI MCP registration disabled. Claude and Codex are workers launched by the broker; they are not task-submitting MCP clients in this governance model:
 
 ~~~powershell
-node .\scripts\setup-local.mjs
+node scripts/setup-local.mjs --skip-register
 ~~~
 
 4. Inspect bridge.config.json. It is local runtime configuration and must remain untracked.
@@ -92,7 +92,7 @@ A separate chat is not automatically awakened when a task finishes. The active C
 
 ## 5. Critical permission limitation
 
-The Agent Bridge MCP schema accepts a workspace alias, not a per-task enforced allowed-path list. The broker checks that the selected workspace exists and is accessible. Its workspace_write mode changes the worker sandbox mode for the selected workspace. The upstream broker also accepts workspace_write independently of target_agent; it does not enforce our policy that Codex must always be read_only. This policy is therefore enforced by keeping ChatGPT as the only MCP client and by the orchestration instructions, not by a server-side target-agent rule.
+The Agent Bridge MCP schema accepts a workspace alias, not a per-task enforced allowed-path list. The broker checks that the selected workspace exists and is accessible. Its workspace_write mode changes the worker sandbox mode for the selected workspace. The upstream broker also accepts workspace_write independently of target_agent; it does not enforce our policy that Codex must always be read_only. This is an important limitation: our Codex read-only rule is enforced by the ChatGPT orchestration instructions and by not registering the broker as a tool for workers, not by a server-side target-agent restriction. The acceptance test must verify that Codex cannot write in read_only mode.
 
 An allowedPaths list included in task text or context is therefore an instruction to the agent, **not a broker-enforced path boundary**. Do not treat it as equivalent to an operating-system sandbox.
 
