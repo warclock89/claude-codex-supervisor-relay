@@ -23,7 +23,7 @@ Upstream references:
 
 ## 2. Local topology
 
-For the intended Windows desktop workflow, one local Agent Bridge HTTP broker is shared by all clients:
+For the intended Windows desktop workflow, one local Agent Bridge HTTP broker is exposed to ChatGPT desktop as the sole MCP client:
 
 ~~~text
 ChatGPT desktop MCP client -------- http://127.0.0.1:8787/mcp
