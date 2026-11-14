@@ -49,14 +49,14 @@ This repository remains the **policy layer**. Agent Bridge remains a separate up
 
 ## Setup overview
 
-Follow the upstream [Agent Bridge README](https://github.com/jcharveyjr/claude-chatgpt-agent-bridge) and [User Guide](https://github.com/jcharveyjr/claude-chatgpt-agent-bridge/blob/main/docs/USER_GUIDE.md). The upstream project currently documents Node.js 20+ and the setup command node scripts/setup-local.mjs.
+Follow the upstream [Agent Bridge README](https://github.com/jcharveyjr/claude-chatgpt-agent-bridge) and [User Guide](https://github.com/jcharveyjr/claude-chatgpt-agent-bridge/blob/main/docs/USER_GUIDE.md). The upstream project currently documents Node.js 20+. For this role model, use its setup command with --skip-register so Claude and Codex are not independently registered as MCP clients.
 
 Recommended sequence:
 1. Install Agent Bridge in a neutral tools directory, not inside the ALTA repository.
 2. Configure named workspaces. Initially allow only a disposable test workspace and keep HTTP bound to 127.0.0.1.
 3. Run the upstream doctor, tests, build, and HTTP smoke test.
-4. Connect Claude Code and Codex CLI to the single broker.
-5. Connect the ChatGPT desktop app to the same MCP endpoint using its MCP server settings.
+4. Keep Claude Code and Codex CLI as broker-launched workers; do not register them as MCP clients.
+5. Connect only the ChatGPT desktop app to the local MCP endpoint using its MCP server settings.
 6. Install/update this Supervisor Skill in Claude Code.
 7. Run acceptance tests in a disposable workspace before adding real project folders.
 
@@ -68,7 +68,7 @@ See [Agent Bridge Integration](docs/AGENT-BRIDGE-INTEGRATION.md) for the operati
 - ChatGPT explicitly selects claude or codex as the target.
 - Claude is the implementation agent. Use workspace_write only for bounded, PO-authorized work in an isolated workspace.
 - Codex is always read_only. Never submit a Codex task with workspace_write.
-- Claude and Codex do not create follow-up tasks or delegate to one another. They return reports; ChatGPT chooses the next route.
+- Only ChatGPT is configured as an MCP client for orchestration. Claude and Codex run as workers launched by Agent Bridge; they do not create follow-up tasks or delegate to one another.
 - Start with read_only. Do not assume a task's allowedPaths list is enforced by the broker as a filesystem sandbox.
 - The user remains Product Owner; product choices and reserved sensitive approvals are not delegated.
 
