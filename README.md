@@ -74,7 +74,7 @@ See [Agent Bridge Integration](docs/AGENT-BRIDGE-INTEGRATION.md) for the operati
 
 ## Important security boundary
 
-Agent Bridge's workspace allowlist limits which configured workspace can be selected. Its workspace_write mode grants write capability within that workspace; it is **not a per-file allowedPaths sandbox**. A path list in a task is an instruction contract, not an independent filesystem boundary.
+Agent Bridge's workspace allowlist limits which configured workspace can be selected. Its workspace_write mode grants write capability within that workspace; it is **not a per-file allowedPaths sandbox**. A path list in a task is an instruction contract, not an independent filesystem boundary. The upstream broker also does not impose a target-specific restriction that prevents Codex from being submitted in workspace_write. The policy that Codex is always read_only is therefore a ChatGPT-side governance rule, reinforced by keeping ChatGPT as the only MCP client. Verify the read-only write refusal in a disposable acceptance test.
 
 Use a disposable workspace for initial write-mode acceptance. Keep real projects read-only until an isolated working copy or worktree is prepared and reviewed. Keep ALTA read-only until its existing working-tree state is preserved and a separate safe implementation workspace is established. Keep secrets, tokens, .env files, and private credentials out of task text and context. Do not expose the broker publicly for this local workflow.
 
