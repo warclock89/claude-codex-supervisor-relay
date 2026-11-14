@@ -1,68 +1,117 @@
 # Claude–Codex Supervisor Relay
 
-**Public Agent Skill — ChatGPT-led workflow, Claude implementation, Codex audit.**
+**Governance Skill for a ChatGPT-led workflow, using Agent Bridge as the transport and local execution layer.**
 
-This project defines the intended orchestration model:
+This repository defines orchestration policy. It does not reimplement an MCP broker or local CLI worker.
 
-- **ChatGPT is the project orchestrator.** It receives the user's goal, breaks work into bounded tasks, chooses whether the next task goes to Claude or Codex, reads reports, evaluates findings, and decides the next technical step.
-- **Claude Code is the primary developer.** It implements the task assigned by ChatGPT, runs permitted tests, and returns a structured report.
-- **OpenAI Codex CLI is the independent auditor.** It reviews only when ChatGPT routes an audit task, uses a read-only sandbox, and never applies fixes.
-- **The user is Product Owner.** Product decisions and sensitive approvals remain with the user.
+## Combined architecture
 
-## Intended end-to-end cycle
+| Layer | Component | Responsibility |
+|---|---|---|
+| Orchestration | ChatGPT | Scopes tasks, chooses the next agent, evaluates reports, and decides the next step. |
+| Governance | This Supervisor Skill | Preserves role hierarchy, evidence standards, project safeguards, and PO approval boundaries. |
+| Transport and queue | [Agent Bridge](https://github.com/jcharveyjr/claude-chatgpt-agent-bridge) | MCP server, asynchronous tasks, local CLI workers, result retrieval, and cancellation. |
+| Implementation | Claude Code | Primary developer; implements bounded tasks assigned by ChatGPT. |
+| Independent review | OpenAI Codex CLI | Read-only auditor; never applies its own findings. |
+| Product authority | User | Product Owner; owns product decisions and sensitive approvals. |
 
-```text
-User → ChatGPT (orchestrator) → private GitHub task inbox
-                                  ↓
-                            local Windows worker
-                                  ↓
-                         selected agent: Claude or Codex
-                                  ↓
-                         report back to private inbox
-                                  ↓
-                         ChatGPT evaluates the report
-                                  ↓
-                      next task: Claude / Codex / PO
-```
+~~~text
+User / Product Owner
+        |
+        v
+ChatGPT — project orchestrator
+        |  delegate_task(source_agent="chatgpt")
+        v
+Agent Bridge — local MCP broker + persistent task queue
+        |                                  |
+        v                                  v
+Claude Code worker                    Codex CLI worker
+(implementation)                      (read-only audit)
+        |                                  |
+        +--------------- result -----------+
+                         |
+                         v
+                  get_task(task_id)
+                         |
+                         v
+              ChatGPT evaluates evidence
+                         |
+             chooses Claude / Codex / PO
+~~~
 
-ChatGPT decides after each report whether to ask Claude to implement/correct, ask Codex to audit, ask either agent for focused verification, or report the outcome to the PO. Agent recommendations do not trigger the next step on their own.
+ChatGPT submits tasks and retrieves results through MCP. The user does not copy prompts or reports between agents during the intended normal workflow.
 
-## Important current status
+## Why this combination
 
-This repository currently contains the public Agent Skill and a Windows Skill installer. The separate private inbox contains task templates and protocol notes. **The local relay worker and live ChatGPT ↔ Claude/Codex round trip are not yet implemented or validated.** This repository must not be described as an operational automatic relay until the real Windows worker, agent dispatch (`claude` versus `codex`), report return, permissions, and end-to-end tests have been completed.
+Agent Bridge already supplies the transport primitives this repository originally planned to build: a local MCP server, asynchronous queue, Claude and Codex CLI adapters, task retrieval, cancellation, named workspaces, and permission modes. Rebuilding those components here would duplicate functionality.
 
-The public Skill enforces the role separation inside Claude Code. By itself, it cannot make ChatGPT send prompts to the user's local computer or automatically receive reports.
+This repository remains the **policy layer**. Agent Bridge remains a separate upstream project; its source is not copied or represented as our code.
 
-## Install the Skill on Windows
+## Setup overview
+
+Follow the upstream [Agent Bridge README](https://github.com/jcharveyjr/claude-chatgpt-agent-bridge) and [User Guide](https://github.com/jcharveyjr/claude-chatgpt-agent-bridge/blob/main/docs/USER_GUIDE.md). The upstream project currently documents Node.js 20+ and the setup command node scripts/setup-local.mjs.
+
+Recommended sequence:
+1. Install Agent Bridge in a neutral tools directory, not inside the ALTA repository.
+2. Configure named workspaces. Initially allow only a disposable test workspace and keep HTTP bound to 127.0.0.1.
+3. Run the upstream doctor, tests, build, and HTTP smoke test.
+4. Connect Claude Code and Codex CLI to the single broker.
+5. Connect the ChatGPT desktop app to the same MCP endpoint using its MCP server settings.
+6. Install/update this Supervisor Skill in Claude Code.
+7. Run acceptance tests in a disposable workspace before adding real project folders.
+
+See [Agent Bridge Integration](docs/AGENT-BRIDGE-INTEGRATION.md) for the operating contract and acceptance checks.
+
+## Mandatory routing rules
+
+- ChatGPT is the only orchestrator and submits tasks with source_agent = chatgpt.
+- ChatGPT explicitly selects claude or codex as the target.
+- Claude is the implementation agent. Use workspace_write only for bounded, PO-authorized work in an isolated workspace.
+- Codex is always read_only. Never submit a Codex task with workspace_write.
+- Claude and Codex do not create follow-up tasks or delegate to one another. They return reports; ChatGPT chooses the next route.
+- Start with read_only. Do not assume a task's allowedPaths list is enforced by the broker as a filesystem sandbox.
+- The user remains Product Owner; product choices and reserved sensitive approvals are not delegated.
+
+## Important security boundary
+
+Agent Bridge's workspace allowlist limits which configured workspace can be selected. Its workspace_write mode grants write capability within that workspace; it is **not a per-file allowedPaths sandbox**. A path list in a task is an instruction contract, not an independent filesystem boundary.
+
+Use a disposable workspace for initial write-mode acceptance. Keep real projects read-only until an isolated working copy or worktree is prepared and reviewed. Keep ALTA read-only until its existing working-tree state is preserved and a separate safe implementation workspace is established. Keep secrets, tokens, .env files, and private credentials out of task text and context. Do not expose the broker publicly for this local workflow.
+
+## Task and report lifecycle
+
+ChatGPT calls agent_bridge_capabilities before first use, then submits one bounded task using delegate_task with source_agent = chatgpt. It selects Claude for implementation or Codex for independent audit, applies the least-permissive mode, retrieves the result with get_task, evaluates the evidence, and chooses the next assignment.
+
+The queue is asynchronous, but a completed task does **not** itself wake this ChatGPT conversation. The ChatGPT client must retrieve the task result. Do not claim event-driven notification unless a separate, tested notification mechanism exists.
+
+## Former GitHub inbox
+
+The private repository warclock89/claude-codex-inbox is retained as a private fallback/reference only. Do not create duplicate active tasks in both GitHub and Agent Bridge. Agent Bridge is the intended primary task transport.
+
+## Current integration status
+
+This branch contains the combined architecture, updated Supervisor Skill, and an integration/acceptance guide. It does **not** prove that Agent Bridge has been installed on the user's Windows machine or connected to this ChatGPT session. Local setup and live round-trip checks remain pending.
+
+## Install this Skill on Windows
 
 Requirements: Git and Claude Code installed.
 
-```powershell
+~~~powershell
 git clone https://github.com/warclock89/claude-codex-supervisor-relay.git
 cd claude-codex-supervisor-relay
-.\scripts\install-skill.ps1
-```
+./scripts/install-skill.ps1
+~~~
 
-The installer copies the Skill to `%USERPROFILE%\.claude\skills\claude-codex-supervisor`. It refuses to overwrite an existing installation.
-
-## Manual install on macOS/Linux
-
-Clone this repository and copy `skills/claude-codex-supervisor` into `~/.claude/skills/`.
+The installer copies the Skill to the Claude user skills directory. It refuses to overwrite an existing installation; review and deliberately replace the old Skill only after backing it up.
 
 ## Safety defaults
 
-- Claude remains the implementer; Codex is read-only.
-- ChatGPT determines task routing and the next workflow step.
-- No clean Git baseline is required; pre-existing modified/untracked work must be preserved.
-- No automatic Git add, commit, push, fetch, stash, reset, checkout, clean, rebase, or merge.
-- No unbounded correction loops or out-of-scope fixes.
-- Supabase, SQL writes, migrations, secrets, credentials, deployments, and production operations require separate explicit authorization.
-
-## Tests and validation
-
-The Skill's behavior and installation have not yet been validated end-to-end across a real ChatGPT-to-Windows-worker-to-Claude/Codex connection. Follow the local setup instructions and test only in a disposable, non-production project before relying on the system.
+- Preserve all pre-existing modified and untracked files.
+- Never run automatic Git add, commit, push, fetch, stash, reset, checkout, clean, rebase, or merge.
+- No unbounded correction loops or opportunistic refactors.
+- Supabase, SQL writes, migrations, secrets, credentials, deployments, production operations, and destructive changes require the specific authorization reserved by the project and PO.
+- Never claim a test, audit, installation, or live handoff passed unless it actually ran and its result was observed.
 
 ## License
 
-No open-source license has been selected yet. Until a license is added, do not assume public availability grants permission to redistribute or modify the contents.
-
+No open-source license has been selected for this repository. Do not assume public availability grants permission to redistribute or modify its contents.
