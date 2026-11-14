@@ -26,9 +26,8 @@ Upstream references:
 For the intended Windows desktop workflow, one local Agent Bridge HTTP broker is shared by all clients:
 
 ~~~text
-ChatGPT desktop MCP client -----+
-Claude Code MCP client --------+---- http://127.0.0.1:8787/mcp
-Codex CLI MCP client ----------+             |
+ChatGPT desktop MCP client -------- http://127.0.0.1:8787/mcp
+                                             |
                                              v
                                       Agent Bridge
                                       local queue
@@ -67,7 +66,7 @@ npm run smoke:http
 ~~~
 
 8. Start one broker using the upstream documented command, then check http://127.0.0.1:8787/health.
-9. Verify MCP registration with claude mcp list and codex mcp list.
+9. Do not register the broker as an MCP server in Claude Code or Codex CLI. Agent Bridge launches those CLIs as worker processes; only ChatGPT should submit tasks.
 10. In ChatGPT desktop, open Settings → MCP servers, add a server using Streamable HTTP and endpoint http://127.0.0.1:8787/mcp, save, and restart the app if prompted.
 11. In a new ChatGPT desktop session, verify that Agent Bridge tools are actually exposed to the assistant. The local health check is not sufficient evidence.
 
@@ -87,13 +86,13 @@ Permission mode:
 - read_only for all audits, investigations, diagnostics, and all Codex tasks.
 - workspace_write only for a bounded Claude implementation task whose scope has PO authorization and whose workspace is safe for writes.
 
-Workers return results only. They do not create the next assignment. ChatGPT retrieves the result with get_task(task_id), evaluates the evidence, and chooses the next route.
+Claude and Codex are worker processes, not MCP clients. They return results only and do not create the next assignment. Do not invoke the upstream generic peer-delegation skill from a worker task; the Supervisor Skill's role hierarchy takes precedence. ChatGPT retrieves the result with get_task(task_id), evaluates the evidence, and chooses the next route.
 
 A separate chat is not automatically awakened when a task finishes. The active ChatGPT client must retrieve the result. Do not describe the integration as event-driven without a separately implemented and tested notification channel.
 
 ## 5. Critical permission limitation
 
-The Agent Bridge MCP schema accepts a workspace alias, not a per-task enforced allowed-path list. The broker checks that the selected workspace exists and is accessible. Its workspace_write mode changes the worker sandbox mode for the selected workspace.
+The Agent Bridge MCP schema accepts a workspace alias, not a per-task enforced allowed-path list. The broker checks that the selected workspace exists and is accessible. Its workspace_write mode changes the worker sandbox mode for the selected workspace. The upstream broker also accepts workspace_write independently of target_agent; it does not enforce our policy that Codex must always be read_only. This policy is therefore enforced by keeping ChatGPT as the only MCP client and by the orchestration instructions, not by a server-side target-agent rule.
 
 An allowedPaths list included in task text or context is therefore an instruction to the agent, **not a broker-enforced path boundary**. Do not treat it as equivalent to an operating-system sandbox.
 
